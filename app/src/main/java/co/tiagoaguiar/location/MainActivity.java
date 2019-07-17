@@ -43,11 +43,15 @@ import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.model.AutocompletePrediction;
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken;
 import com.google.android.libraries.places.api.model.Place;
+import com.google.android.libraries.places.api.model.RectangularBounds;
 import com.google.android.libraries.places.api.model.TypeFilter;
+import com.google.android.libraries.places.api.net.FetchPlaceRequest;
+import com.google.android.libraries.places.api.net.FetchPlaceResponse;
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest;
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsResponse;
 import com.google.android.libraries.places.api.net.PlacesClient;
 
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -131,52 +135,77 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 if (location != null) {
                   Log.i("Teste", location.getLatitude() + " " + location.getLongitude());
 
-                  FindAutocompletePredictionsRequest predictionsRequest = FindAutocompletePredictionsRequest.builder()
-                          .setCountry("BR")
-                          .setTypeFilter(TypeFilter.ESTABLISHMENT)
-                          .setSessionToken(token)
-                          .setQuery("shell")
-                          .build();
+                  LatLng origin = new LatLng(location.getLatitude(), location.getLongitude());
+                  mMap.addMarker(new MarkerOptions().position(origin).title("Estou aqui"));
+                  mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(origin, 14));
+                  mMap.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
+                    @Override
+                    public void onCameraIdle() {
+                      FindAutocompletePredictionsRequest predictionsRequest = FindAutocompletePredictionsRequest.builder()
+                              .setCountry("BR")
+                              .setTypeFilter(TypeFilter.ESTABLISHMENT)
+                              .setSessionToken(token)
+                              .setLocationRestriction(RectangularBounds.newInstance(
+                                      mMap.getProjection().getVisibleRegion().latLngBounds
+                              ))
+                              .setQuery("posto")
+                              .build();
 
 
-                  placesClient.findAutocompletePredictions(predictionsRequest)
-                          .addOnCompleteListener(new OnCompleteListener<FindAutocompletePredictionsResponse>() {
-                            @Override
-                            public void onComplete(@NonNull Task<FindAutocompletePredictionsResponse> task) {
-                              if (task.isSuccessful()) {
-                                FindAutocompletePredictionsResponse result = task.getResult();
+                      placesClient.findAutocompletePredictions(predictionsRequest)
+                              .addOnCompleteListener(new OnCompleteListener<FindAutocompletePredictionsResponse>() {
+                                @Override
+                                public void onComplete(@NonNull Task<FindAutocompletePredictionsResponse> task) {
+                                  if (task.isSuccessful()) {
+                                    FindAutocompletePredictionsResponse result = task.getResult();
 
-                                if (result != null) {
+                                    if (result != null) {
 
-                                  List<AutocompletePrediction> predictions = result.getAutocompletePredictions();
+                                      List<AutocompletePrediction> predictions = result.getAutocompletePredictions();
 
-                                  for(AutocompletePrediction p : predictions) {
+                                      for (AutocompletePrediction p : predictions) {
 
-                                    List<Place.Type> placeTypes = p.getPlaceTypes();
-                                    for (Place.Type type : placeTypes) {
-                                      Log.i("Teste Places", "type " + type.name());
+                                        /*
+                                        List<Place.Type> placeTypes = p.getPlaceTypes();
+                                        for (Place.Type type : placeTypes) {
+                                          Log.i("Teste Places", "type " + type.name());
+
+                                        }
+                                        */
+
+                                        Log.i("Teste Places", p.getFullText(null).toString());
+                                        Log.i("Teste Places", p.getPlaceId());
+
+
+                                        List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG);
+                                        FetchPlaceRequest request = FetchPlaceRequest.builder(p.getPlaceId(), fields)
+                                                .setSessionToken(token)
+                                                .build();
+
+                                        placesClient.fetchPlace(request)
+                                                .addOnSuccessListener(new OnSuccessListener<FetchPlaceResponse>() {
+                                                  @Override
+                                                  public void onSuccess(FetchPlaceResponse response) {
+                                                    Place place = response.getPlace();
+                                                    LatLng latLng = place.getLatLng();
+                                                    mMap.addMarker(new MarkerOptions().position(latLng).title(place.getName()));
+                                                  }
+                                                });
+
+
+                                      }
+
 
                                     }
 
-                                    Log.i("Teste Places", p.getFullText(null).toString());
-                                    Log.i("Teste Places", p.getPlaceId());
+                                  } else {
+                                    Log.i("Teste Places", task.getException().getMessage());
+
                                   }
-
-
-
                                 }
-
-                              } else {
-                                Log.i("Teste Places", task.getException().getMessage());
-
-                              }
-                            }
-                          });
-
-
-                  LatLng origin = new LatLng(location.getLatitude(), location.getLongitude());
-                  mMap.addMarker(new MarkerOptions().position(origin).title("Estou aqui"));
-                  mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(origin, 15));
+                              });
+                    }
+                  });
 
                   if (!Geocoder.isPresent()) {
                     Log.i("Teste", "GeoCoder indisponivel");
